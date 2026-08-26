@@ -7,44 +7,59 @@
     - User must be logged off.
     - Deletes the profile via WMI/CIM so both files and registry
       profile entries are cleaned up.
-    Run this in powershellscript: Set-ExecutionPolicy RemoteSigned -Scope Process -Force
-
+    Run this in powershellscript: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+    Copy the file path and add & before the file path : &"C:\Users\baominhchau.nguye\Downloads\Remove_UserProfile.ps1"
 #>
 
-Write-Host "=== Delete Windows User Profile ===" -ForegroundColor Cyan
-Write-Host "Run this as Administrator and make sure the user is logged off." -ForegroundColor Yellow
+# Run this script in an elevated PowerShell session (Run as Administrator)
 
-# Ask user for the profile folder name (e.g. the folder under C:\Users)
-$UserName = Read-Host -Prompt "Enter the profile folder name (as shown under C:\Users)"
+# Profiles to keep (folder names under C:\Users)
+$ExcludedProfiles = @(
+    'bl setup',
+    'maintenance',
+    'bl user'
+)
 
-if ([string]::IsNullOrWhiteSpace($UserName)) {
-    Write-Host "No profile name entered. Exiting." -ForegroundColor Red
-    exit 1
+# Optional: also keep some standard/system profiles
+$ExcludedProfiles += @(
+    'Administrator',
+    'Default',
+    'Default User',
+    'Public',
+    'All Users'
+)
+
+Write-Host "Excluded profiles:" ($ExcludedProfiles -join ', ')
+
+# Get all user profiles via CIM
+$profiles = Get-CimInstance -Class Win32_UserProfile
+
+foreach ($profile in $profiles) {
+    # Skip special/system profiles and profiles without a local path
+    if ($profile.Special -eq $true -or [string]::IsNullOrWhiteSpace($profile.LocalPath)) {
+        continue
+    }
+
+    # Extract folder name from LocalPath (e.g. C:\Users\username -> username)
+    $folderName = Split-Path $profile.LocalPath -Leaf
+
+    # Skip if this profile folder is in the exclusion list
+    if ($ExcludedProfiles -contains $folderName) {
+        Write-Host "Skipping profile:" $profile.LocalPath
+        continue
+    }
+
+    # Safety: skip if profile is currently in use (loaded)
+    if ($profile.Loaded -eq $true) {
+        Write-Host "Profile in use, skipping:" $profile.LocalPath
+        continue
+    }
+
+    # At this point, we will delete the profile
+    Write-Host "Deleting profile:" $profile.LocalPath
+
+    # Remove profile (uncomment Remove-CimInstance when ready)
+    # Remove-CimInstance -InputObject $profile
 }
 
-Write-Host "Deleting profile for '$UserName'..." -ForegroundColor Yellow
-
-# Find the profile whose local path ends with the specified folder name
-$profile = Get-CimInstance -ClassName Win32_UserProfile |
-    Where-Object { $_.LocalPath -and ($_.LocalPath.Split('\')[-1] -ieq $UserName) }
-
-if (-not $profile) {
-    Write-Host "No profile found for '$UserName'. Check C:\Users for the exact folder name." -ForegroundColor Red
-    exit 1
-}
-
-if ($profile.Loaded) {
-    Write-Host "Profile is currently loaded (user likely logged on). Log off that user and try again." -ForegroundColor Red
-    exit 1
-}
-
-try {
-    Remove-CimInstance -InputObject $profile -ErrorAction Stop
-    Write-Host "Profile for '$UserName' deleted successfully." -ForegroundColor Green
-}
-catch {
-    Write-Host "Failed to delete profile: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
-}
-
-
+Write-Host "Done. Review output above."
