@@ -4,5 +4,5 @@ Remove all user profiles for window 11 with powershell (Interactive panel mainte
     - User must be logged off.
     - Deletes the profile via WMI/CIM so both files and registry
       profile entries are cleaned up.
-    Run this in powershellscript: Set-ExecutionPolicy RemoteSigned -Scope Process -Force
-
+    Run this in powershellscript before using the file: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+    Copy the file path and add & before the file path : &"C:\Users\baominhchau.nguye\Downloads\Remove_UserProfile.ps1"
